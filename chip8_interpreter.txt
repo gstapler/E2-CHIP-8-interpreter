@@ -63,7 +63,7 @@ I = 0x0
 # Program counter is 16 bits wide (0 - 65535), uint16
 PC = 0x200
 
-# Stack pointer is 8 bits wide (0 - 255), uint8
+# Stack pointer is 4 bits wide (0 - 15), uint4(?)
 SP = 0x0
 
 # Set DS to 64x32, colormode 3
@@ -316,7 +316,7 @@ function void step() {
     # Simulate unsigned integer overflows/underflows
     # by masking out the bottom byte/bytes
     for(Reg=0x0, 0xF) {VReg[Reg, number] = VReg[Reg, number] && 0xFF}
-    SP = SP && 0xFF
+    SP = SP && 0xF
     I = I && 0xFFFF
     PC = PC && 0xFFFF
 
