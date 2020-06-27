@@ -4,7 +4,7 @@
 
 if(first() | ~DS) {
     #include "chip8_interpreter"
-    #include "chip8_stars"
+    #include "chip8_trip8"
 
     #[ Quirks: Some programs require different behavior of certain instructions.
                These will break things or do nothing in most programs. ]#
@@ -12,7 +12,7 @@ if(first() | ~DS) {
     Q_Fx55_Fx65_IncrementI = 0
 }
 runOnTick(1)
-while(perf(1)) {
+while(perf(2)) {    
     # Step will move the program counter forward and execute the next instruction in memory.
     step()
     # PC_deref will show the full 2 byte instruction currently being executed.
