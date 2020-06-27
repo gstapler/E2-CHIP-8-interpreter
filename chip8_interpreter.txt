@@ -1,0 +1,389 @@
+@name chip8_interpreter
+
+# Display
+@persist DS:wirelink
+# Memory
+@persist Memory:array
+# Registers
+@persist VReg:array
+# Address register
+@persist I:number
+# Timers
+@persist DT:number ST:number
+# Program Counter Pointer
+@persist PC:number
+# Stack Pointer
+@persist SP:number
+# Quirks
+@persist [Q_Fx55_Fx65_IncrementI]:number
+
+
+#[ Interpreter quirks ]#
+
+# Increment I on Fx55/Fx65 (1 = yes, 0 = no)
+# Very popular CHIP-8 references (Cowgod et al) do not increment I
+# Cowgod's reference: http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#Fx55
+Q_Fx55_Fx65_IncrementI = 0
+
+
+#[
++---------------+= 0xFFF (4095) End of Chip-8 RAM
+|               |
+|               |
+|               |
+|               |
+|               |
+| 0x200 to 0xFFF|
+|     Chip-8    |
+| Program / Data|
+|     Space     |
+|               |
+|               |
+|               |
++- - - - - - - -+= 0x600 (1536) Start of ETI 660 Chip-8 programs
+|               |
+|               |
+|               |
++---------------+= 0x200 (512) Start of most Chip-8 programs
+| 0x000 to 0x1FF|
+| Reserved for  |
+|  interpreter  |
++---------------+= 0x000 (0) Start of Chip-8 RAM
+]#
+
+# All memory locations are 8 bits wide (0 - 255), uint8
+Memory = array()
+
+# Normal registers are 8 bits wide (0 - 255) uint8
+VReg = array(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0)
+
+# Address register is 16 bits wide (0 - 65535), uint16
+I = 0x0
+
+# Program counter is 16 bits wide (0 - 65535), uint16
+PC = 0x200
+
+# Stack pointer is 8 bits wide (0 - 255), uint8
+SP = 0x0
+
+# Set DS to 64x32, colormode 3
+DS[1048574] = 1
+DS[1048574] = 0
+DS[1048573] = 64
+DS[1048572] = 32
+DS[1048569] = 3
+
+# Set interpreter hexadecimal font
+# 0: 0x000000
+Memory[0x000000, number] = 0xF0
+Memory[0x000001, number] = 0x90
+Memory[0x000002, number] = 0x90
+Memory[0x000003, number] = 0x90
+Memory[0x000004, number] = 0xF0
+# 1: 0x000005
+Memory[0x000005, number] = 0x20
+Memory[0x000006, number] = 0x60
+Memory[0x000007, number] = 0x20
+Memory[0x000008, number] = 0x20
+Memory[0x000009, number] = 0x70
+# 2: 0x00000A
+Memory[0x00000A, number] = 0xF0
+Memory[0x00000B, number] = 0x10
+Memory[0x00000C, number] = 0xF0
+Memory[0x00000D, number] = 0x80
+Memory[0x00000E, number] = 0xF0
+# 3: 0x00000F
+Memory[0x00000F, number] = 0xF0
+Memory[0x000010, number] = 0x10
+Memory[0x000011, number] = 0xF0
+Memory[0x000012, number] = 0x10
+Memory[0x000013, number] = 0xF0
+# 4: 0x000014
+Memory[0x000014, number] = 0x90
+Memory[0x000015, number] = 0x90
+Memory[0x000016, number] = 0xF0
+Memory[0x000017, number] = 0x10
+Memory[0x000018, number] = 0x10
+# 5: 0x000019
+Memory[0x000019, number] = 0xF0
+Memory[0x00001A, number] = 0x80
+Memory[0x00001B, number] = 0xF0
+Memory[0x00001C, number] = 0x10
+Memory[0x00001D, number] = 0xF0
+# 6: 0x000020
+Memory[0x00001E, number] = 0xF0
+Memory[0x00001F, number] = 0x90
+Memory[0x000020, number] = 0x90
+Memory[0x000021, number] = 0x90
+Memory[0x000022, number] = 0xF0
+# 7: 0x000023
+Memory[0x000023, number] = 0xF0
+Memory[0x000024, number] = 0x10
+Memory[0x000025, number] = 0x20
+Memory[0x000026, number] = 0x40
+Memory[0x000027, number] = 0x40
+# 8: 0x000028
+Memory[0x000028, number] = 0xF0
+Memory[0x000029, number] = 0x90
+Memory[0x00002A, number] = 0xF0
+Memory[0x00002B, number] = 0x90
+Memory[0x00002C, number] = 0xF0
+# 9: 0x00002D
+Memory[0x00002D, number] = 0xF0
+Memory[0x00002E, number] = 0x10
+Memory[0x00002F, number] = 0x20
+Memory[0x000030, number] = 0x40
+Memory[0x000031, number] = 0x40
+# A: 0x000032
+Memory[0x000032, number] = 0xF0
+Memory[0x000033, number] = 0x90
+Memory[0x000034, number] = 0xF0
+Memory[0x000035, number] = 0x90
+Memory[0x000036, number] = 0x90
+# B: 0x000037
+Memory[0x000037, number] = 0xE0
+Memory[0x000038, number] = 0x90
+Memory[0x000039, number] = 0xE0
+Memory[0x00003A, number] = 0x90
+Memory[0x00003B, number] = 0xE0
+# C: 0x00003C
+Memory[0x00003C, number] = 0xF0
+Memory[0x00003D, number] = 0x80
+Memory[0x00003E, number] = 0x80
+Memory[0x00003F, number] = 0x80
+Memory[0x000040, number] = 0xF0
+# D: 0x000041
+Memory[0x000041, number] = 0xF0 
+Memory[0x000042, number] = 0x10
+Memory[0x000043, number] = 0x20
+Memory[0x000044, number] = 0x40
+Memory[0x000045, number] = 0x40
+# E: 0x000046
+Memory[0x000046, number] = 0xF0
+Memory[0x000047, number] = 0x80
+Memory[0x000048, number] = 0xF0
+Memory[0x000049, number] = 0x80
+Memory[0x00004A, number] = 0xF0
+# F: 0x00004B
+Memory[0x00004B, number] = 0xF0
+Memory[0x00004C, number] = 0x80
+Memory[0x00004D, number] = 0xF0
+Memory[0x00004E, number] = 0x80
+Memory[0x00004F, number] = 0x80
+
+function void i_0nnn(NNN:number) {}                                                                      # 0nnn: SYS nnn, unused, effectively NOP
+
+function void i_00E0() {                                                                                 # 00E0: CLS, Clear screen
+    DS[1048574] = 1
+    DS[1048574] = 0   
+}                                                                    
+
+function void i_00EE() {                                                                                 # 00EE: RET, Return from subroutine
+    SP -= 0x1                                               # Decrement stack pointer
+    PC = Memory[SP, number]                                 # Store $SP in program counter
+}
+
+function void i_1nnn(NNN:number) {PC = NNN}                                                              # 1nnn: JP   nnn;    Set program counter to nnn;
+
+function void i_2nnn(NNN:number) {                                                                       # 2nnn: CALL nnn;    Store PC at $SP, increment SP, Store nnn in PC
+    Memory[SP, number] = PC
+    SP += 0x1
+    PC = NNN
+}
+
+function void i_3xkk(X:number, Byte:number) {if( VReg[X, number] == Byte) { PC += 0x2 }}                 # 3xkk: SE   Vx, kk; if Vx == kk then PC += 2
+function void i_4xkk(X:number, Byte:number) {if( VReg[X, number] != Byte) { PC += 0x2 }}                 # 4xkk: SNE  Vx, kk; if Vx != kk then PC += 2
+function void i_5xy0(X:number, Y:number)    {if( VReg[X, number] == VReg[Y, number]) { PC += 0x2 }}      # 5xy0: SE   Vx, Vy; if Vx == Vy then PC += 2
+function void i_6xkk(X:number, Byte:number) {VReg[X, number] = Byte}                                     # 6xkk: LD   Vx, kk; Set Vx = kk
+function void i_7xkk(X:number, Byte:number) {VReg[X, number] = VReg[X, number] + Byte}                   # 7xkk: ADD  Vx, kk; Add kk to Vx, store result in Vx                
+function void i_8xy0(X:number, Y:number)    {VReg[X, number] = VReg[Y, number]}                          # 8xy0: LD   Vx, Vy; Vx = Vy
+function void i_8xy1(X:number, Y:number)    {VReg[X, number] = bOr(VReg[X, number], VReg[Y, number])}    # 8xy1: OR   Vx, Vy;
+function void i_8xy2(X:number, Y:number)    {VReg[X, number] = VReg[X, number] && VReg[Y, number]}       # 8xy2: AND  Vx, Vy;
+function void i_8xy3(X:number, Y:number)    {VReg[X, number] = bXor(VReg[X, number], VReg[Y, number])}   # 8xy3: XOR  Vx, Vy;
+
+function void i_8xy4(X:number, Y:number)  {                                                              # 8xy4: ADD  Vx, Vy;                      
+    local Ret = VReg[X, number] + VReg[Y, number]
+    if( Ret > 0xFF ) {                                      # Carry/overflow case
+        VReg[0xF, number] = 1                               # Set VF (Carry occurred)
+    } else {                                                # No carry case
+        VReg[0xF, number] = 0                               # Unset VF (No carry occurred)
+    }
+    VReg[X, number] = Ret && 0xFF                           # Keep only lowest byte of result
+}
+
+function void i_8xy5(X:number, Y:number)  {                                                              # 8xy5: SUB  Vx, Vy;
+    if( VReg[Y, number] > VReg[X, number] ) {               # Borrow/underflow case
+        VReg[0xF, number] = 0                               # Unset VF (Borrow occurred)
+    } else {                                                # No borrow case
+        VReg[0xF, number] = 1                               # Set VF (No borrow occured)
+    }
+    VReg[X, number] = VReg[X, number] - VReg[Y, number]     # Subtract Vy from Vx and store in Vx
+}
+
+function void i_8xy6(X:number, Y:number)  {                                                              # 8xy6: SHR  Vx {, Vy};
+    VReg[0xF, number] = VReg[X, number] && 0b00000001       # Store LSB of Vx in VF
+    VReg[X, number] = VReg[X, number] >> 1                  # Shift Vx right by one (Division by 2)
+}                                                               
+
+function void i_8xy7(X:number, Y:number)  {                                                              # 8xy7: SUBN Vx, Vy;
+    if( VReg[Y, number] > VReg[X, number] ) {
+        VReg[0xF, number] = 1                               # Set VF (No borrow occurred)
+    } else {
+        VReg[0xF, number] = 0                               # Set VF (Borrow occurred)
+    }
+    VReg[X, number] = VReg[Y, number] - VReg[X, number]     # Subtract Vx from Vy and store in Vx
+}
+
+function void i_8xyE(X:number, Y:number)  {                                                              # 8xyE: SHL  Vx {, Vy};
+    VReg[0xF, number] = (VReg[X, number] && 0b10000000) >> 7# Store MSB of Vx in VF
+    VReg[X, number] = VReg[X, number] << 1                  # Shift Vx left by one (Multiplication by 2)
+}                                    
+
+function void i_9xy0(X:number, Y:number)  {                                                              # 9xy0: SNE Vx, Vy; if Vx != Vy then PC += 2
+    if(VReg[X, number] != VReg[Y, number]) { PC += 2 }      # Skip next instruction (PC +=1 ) if Vx != Vy
+}
+
+function void i_Annn(NNN:number) {I = NNN}                                                               # Annn: LD I,  nnn; I = nnn
+function void i_Bnnn(NNN:number) {PC = NNN + VReg[0, number]}                                            # Bnnn: JP V0, nnn; PC = nnn + V0
+function void i_Cxkk(X:number, Byte:number) {VReg[X, number] = randint(0x0, 0xFF) && Byte}               # Cxkk: RND Vx, kk; Vx = randint(0x0-0xFF) AND kk
+
+function void i_Dxyn(X:number, Y:number, N:number) {                                                     # Dxyn: DRW Vx, Vy, bytes;
+    VReg[0xF, number] = 0                                   # Unset VF
+    local COn = rgb2digi(255, 255, 255, 3)                  # Set pixel-on color
+    local COff = rgb2digi(0, 0, 0, 3)                       # Set pixel-off color
+
+    for(Yp = 0x0, N-1) {                                    # For each row byte [I, I+N)
+        local BP = (VReg[Y, number]*64) + (Yp*64) + VReg[X, number]       
+                                                            # Resolve DS base pointer
+        local Byte = Memory[I+Yp, number]                   # Read row byte
+
+        for(Sh=0x0, 0x8) {
+            if(Byte && 0b10000000 >> Sh) {                  # Mask out each bit of the row byte
+                if(DS[BP + Sh] == COff) {                   # No collision case
+                    DS[BP + Sh] = COn                       # Set pixel-on
+                } else {                                    # Collsion case
+                    DS[BP + Sh] = COff                      # Set pixel-off (xor)
+                    VReg[0xF, number] = 1                   # Set VF
+                }
+            }
+        }
+    }
+}
+function void i_Ex9E(X:number) {print("Ex9E")}
+function void i_ExA1(X:number) {print("ExA1")}
+function void i_Fx07(X:number) {VReg[X, number] = DT}                                                    # Fx07: LD Vx, DT
+function void i_Fx0A(X:number) {print("Fx0A")}
+function void i_Fx15(X:number) {DT = VReg[X, number]}                                                    # Fx15: LD  DT, Vx;                         
+function void i_Fx18(X:number) {ST = VReg[X, number]}                                                    # Fx18: LD  ST, Vx;
+function void i_Fx1E(X:number) {I = I + VReg[X, number]}                                                 # Fx1E: ADD I, Vx;
+function void i_Fx29(X:number) {I = VReg[X, number] * 0x05}                                              # Fx29: LD I, Vx * 0x05;   
+function void i_Fx33(X:number) {                                                                         # Fx33: LD I, BCD(Vx);
+    local Ret = VReg[X, number]
+    Memory[I+2, number] = Ret % 10
+    local Ret = Ret - (Ret % 10)
+    Memory[I+1, number] = (Ret % 100) / 10
+    local Ret = Ret - (Ret % 100)
+    Memory[I, number] = (Ret % 1000) / 100
+}
+function void i_Fx55(X:number) {                                                                         # Fx55: LD [I], Vx;
+    for(Reg=0x0, X) {
+        Memory[I+Reg, number] = VReg[Reg, number]
+    }
+    if(Q_Fx55_Fx65_IncrementI == 1){ I = I + X + 1 }        # Only increment I when the quirk is enabled
+}
+function void i_Fx65(X:number) {                                                                         # Fx65: LD Vx, [I]
+    for(Reg=0x0, X) {
+        VReg[Reg, number] = Memory[I+Reg, number]
+    }
+    if(Q_Fx55_Fx65_IncrementI == 1) { I = I + X + 1 }       # Only increment I when the quirk is enabled
+}
+
+
+function void step() {
+
+    local InstHI = Memory[PC, number]                       # High byte
+    local InstLO = Memory[PC+1, number]                     # Low byte
+    local HH = InstHI >> 4                                  # High-high nibble, first 4 bits
+    local HL = InstHI && 0x0F                               # High-low nibble, second 4 bits
+    local LH = InstLO >> 4                                  # Low-high nibble, third 4 bits
+    local LL = InstLO && 0x0F                               # Low-low nibble, last 4 bits
+    local IBYTE = InstLO                                    # last 8 bits (last byte)
+    local INNN = (HL << 8 || LH << 4 || LL)                 # last 12 bits
+    
+    #print(InstHI:toString(16), InstLO:toString(16), HH:toString(16), HL:toString(16), LH:toString(16), LL:toString(16), IBYTE:toString(16), INNN:toString(16))
+    #print(PC, Memory[PC, number]:toString(16), Memory[PC+1, number]:toString(16))
+    
+    # Simulate unsigned integer overflows/underflows
+    # by masking out the bottom byte/bytes
+    for(Reg=0x0, 0xF) {VReg[Reg, number] = VReg[Reg, number] && 0xFF}
+    SP = SP && 0xFF
+    I = I && 0xFFFF
+    PC = PC && 0xFFFF
+
+
+    # Increment PC
+    PC += 0x2
+    
+    # Decrement timers if they've been set
+    if(DT > 0) {DT--}
+    if(ST > 0) {ST--}
+    
+    switch ( HH ) {
+
+        case 0x0, switch(InstHI || InstLO)  {                                                   
+            case 0x00E0, i_00E0() break                     # 00E0: CLS, Clear screen
+            case 0x00EE, i_00EE() break                     # 00EE: RET, Return from subroutine
+            default, i_0nnn(INNN) break                     # 0nnn: SYS nnn, unused, effectively NOP
+        } break
+        
+        case 0x1, i_1nnn(INNN) break                        # 1nnn: JP   nnn;    Set program counter to nnn;
+        case 0x2, i_2nnn(INNN) break                        # 2nnn: CALL nnn;    Store PC at $SP, increment SP, Store nnn in PC
+        case 0x3, i_3xkk(HL, IBYTE) break                   # 3xkk: SE   Vx, kk; if Vx == kk then PC += 2
+        case 0x4, i_4xkk(HL, IBYTE) break                   # 4xkk: SNE  Vx, kk; if Vx != kk then PC += 2
+        case 0x5, i_5xy0(HL, LH) break                      # 5xy0: SE   Vx, Vy; if Vx == Vy then PC += 2
+        case 0x6, i_6xkk(HL, IBYTE) break                   # 6xkk: LD   Vx, kk; Set Vx = kk
+        case 0x7, i_7xkk(HL, IBYTE) break                   # 7xkk: ADD  Vx, kk; Add kk to Vx, store result in Vx
+        
+        case 0x8, switch(LL) {
+            case 0x0, i_8xy0(HL, LH) break                  # 8xy0: LD   Vx, Vy; Vx = Vy
+            case 0x1, i_8xy1(HL, LH) break                  # 8xy1: OR   Vx, Vy;
+            case 0x2, i_8xy2(HL, LH) break                  # 8xy2: AND  Vx, Vy;
+            case 0x3, i_8xy3(HL, LH) break                  # 8xy3: XOR  Vx, Vy;
+            case 0x4, i_8xy4(HL, LH) break                  # 8xy4: ADD  Vx, Vy;
+            case 0x5, i_8xy5(HL, LH) break                  # 8xy5: SUB  Vx, Vy;
+            case 0x6, i_8xy6(HL, LH) break                  # 8xy6: SHR  Vx {, Vy};
+            case 0x7, i_8xy7(HL, LH) break                  # 8xy7: SUBN Vx, Vy;
+            case 0xE, i_8xyE(HL, LH) break                  # 8xyE: SHL  Vx {, Vy};
+        } break
+        
+        case 0x9, i_9xy0(HL, LH) break                      # 9xy0: SNE Vx, Vy; if Vx != Vy then PC += 2
+        case 0xA, i_Annn(INNN) break                        # Annn: LD I,  nnn; I = nnn
+        case 0xB, i_Bnnn(INNN) break                        # Bnnn: JP V0, nnn; PC = nnn + V0
+        case 0xC, i_Cxkk(HL, IBYTE) break                   # Cxkk: RND Vx, kk; Vx = randint(0-255) AND kk
+        case 0xD, i_Dxyn(HL, LH, LL) break                  # Dxyn: DRW Vx, Vy, nibble; 
+        
+        case 0xE, switch(LH) {
+            case 0x9, i_Ex9E(HL) break                      # Ex9E: SKP  Vx; Skip next instruction if key with value Vx is pressed
+            case 0xA, i_ExA1(HL) break                      # ExA1: SKNP Vx; Skip next instruction if key with value Vx is NOT pressed
+        } break
+        
+        case 0xF, switch(LH) {
+            case 0x0, switch(LL) {
+                case 0x7, i_Fx07(HL) break                  # Fx07: LD Vx, DT;
+                case 0xA, i_Fx0A(HL) break                  # Fx0A: LD Vx, K;
+            } break
+            case 0x1, switch(LL) {
+                case 0x5, i_Fx15(HL) break                  # Fx15: LD  DT, Vx;
+                case 0x8, i_Fx18(HL) break                  # Fx18: LD  ST, Vx;
+                case 0xE, i_Fx1E(HL) break                  # Fx1E: ADD I, Vx;
+            } break
+            case 0x2, i_Fx29(HL) break                      # Fx29: LD F, Vx;
+            case 0x3, i_Fx33(HL) break                      # Fx33: LD B, Vx;
+            case 0x5, i_Fx55(HL) break                      # Fx55: LD [I], Vx;
+            case 0x6, i_Fx65(HL) break                      # Fx65: LD Vx, [I]
+        } break
+        default, print("Malformed instruction", (InstHI << 8 || InstLO):toString(16), "@", PC:toString(16), HH:toString(16), HL:toString(16), LH:toString(16), LL:toString(16)) break
+    }
+}
+
+

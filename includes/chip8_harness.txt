@@ -1,0 +1,12 @@
+@name chip8
+@outputs VReg:array I:number DT:number ST:number PC:number SP:number PC_deref:string DS:wirelink
+@inputs DS:wirelink
+
+if(first()) {
+    #include "chip8_interpreter"
+    #include "chip8_test"
+}
+
+interval(20)
+step()
+PC_deref = toString( Memory[PC, number] << 8 || Memory[PC+1, number], 16)

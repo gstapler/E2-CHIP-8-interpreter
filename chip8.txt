@@ -1,0 +1,20 @@
+@name chip8
+@outputs VReg:array I:number DT:number ST:number PC:number SP:number PC_deref:string DS:wirelink
+@inputs DS:wirelink
+
+if(first() | ~DS) {
+    #include "chip8_interpreter"
+    #include "chip8_stars"
+
+    #[ Quirks: Some programs require different behavior of certain instructions.
+               These will break things or do nothing in most programs. ]#
+    # Increment I after executing an Fx55 or Fx65 instruction.
+    Q_Fx55_Fx65_IncrementI = 0
+}
+runOnTick(1)
+while(perf(1)) {
+    # Step will move the program counter forward and execute the next instruction in memory.
+    step()
+    # PC_deref will show the full 2 byte instruction currently being executed.
+    PC_deref = toString( Memory[PC, number] << 8 || Memory[PC+1, number], 16)
+}
